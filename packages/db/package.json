@@ -1,0 +1,19 @@
+{
+  "name": "@bugbot/db",
+  "version": "1.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "npm run prisma:generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.5.0",
+    "@prisma/client": "^7.5.0",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "prisma": "^7.5.0"
+  }
+}
