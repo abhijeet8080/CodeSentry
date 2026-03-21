@@ -2,7 +2,12 @@ import { Worker } from "bullmq";
 import type { ReviewJob } from "@config/types";
 import { redisConnectionOptions } from "@config/redis";
 import { logger } from "@config/logger";
-import { getPRFiles } from "./lib/github";
+import {
+  getPRDetails,
+  getPRFiles,
+  postReview
+} from "./lib/github";
+import { buildReviewComments } from "./lib/comments";
 import { buildChunks } from "./lib/chunker";
 import { processChunks } from "./workers/review";
 
@@ -40,6 +45,16 @@ const worker = new Worker<ReviewJob>(
       { deliveryId, issueCount: issues.length },
       `Issues found: ${issues.length}`
     );
+
+    if (issues.length > 0) {
+      const prDetails = await getPRDetails(repoFullName, prNumber);
+      const commitId = prDetails.head.sha;
+      const reviewComments = buildReviewComments(issues);
+
+      await postReview(repoFullName, prNumber, reviewComments, commitId);
+
+      logger.info({ deliveryId, prNumber, repoFullName }, "Review posted");
+    }
   },
   {
     connection: redisConnectionOptions("consumer")

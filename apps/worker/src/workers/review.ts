@@ -11,6 +11,7 @@ export type ReviewIssueResult = {
   description: string;
   suggestion: string | null;
   filename: string;
+  addedLines: number[];  // valid diff lines for this chunk — used to snap AI line numbers
 };
 
 export async function processChunks(
@@ -30,7 +31,8 @@ export async function processChunks(
         results.push({
           ...issue,
           suggestion,
-          filename: chunk.filename
+          filename: chunk.filename,
+          addedLines: chunk.addedLines
         });
       }
     } catch (err) {
