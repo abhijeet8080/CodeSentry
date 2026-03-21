@@ -2,12 +2,17 @@ import { Worker } from "bullmq";
 import type { ReviewJob } from "@config/types";
 import { redisConnectionOptions } from "@config/redis";
 import { logger } from "@config/logger";
+import { prisma } from "./lib/db";
 import {
   getPRDetails,
   getPRFiles,
+  listIssueComments,
   postReview
 } from "./lib/github";
-import { buildReviewComments } from "./lib/comments";
+import {
+  buildReviewComments,
+  filterIssuesNotYetPosted
+} from "./lib/comments";
 import { buildChunks } from "./lib/chunker";
 import { processChunks } from "./workers/review";
 
@@ -18,42 +23,96 @@ const worker = new Worker<ReviewJob>(
 
     logger.info(
       { jobId: job.id, name: job.name, deliveryId, prNumber, repoFullName },
-      "Processing review job"
+      "Processing PR"
     );
 
-    logger.info({ deliveryId, prNumber, repoFullName }, "Fetching PR files");
+    const reviewJob = await prisma.reviewJob.upsert({
+      where: { deliveryId },
+      create: {
+        deliveryId,
+        prNumber,
+        repoFullName,
+        status: "processing"
+      },
+      update: {
+        status: "processing",
+        error: null,
+        issueCount: null,
+        tokenUsed: null
+      }
+    });
 
-    const files = await getPRFiles(repoFullName, prNumber);
+    try {
+      logger.info({ deliveryId, prNumber, repoFullName }, "Fetching PR files");
 
-    logger.info(
-      { deliveryId, fileCount: files.length },
-      `Files fetched: ${files.length}`
-    );
+      const files = await getPRFiles(repoFullName, prNumber);
 
-    const chunks = buildChunks(files);
+      logger.info(
+        { deliveryId, fileCount: files.length },
+        `Files fetched: ${files.length}`
+      );
 
-    const totalTokens = chunks.reduce((sum, c) => sum + c.tokenCount, 0);
+      const chunks = buildChunks(files);
 
-    logger.info(
-      { deliveryId, chunkCount: chunks.length, totalTokens },
-      `Chunks created: ${chunks.length}, total tokens: ${totalTokens}`
-    );
+      const chunkEstimateTokens = chunks.reduce((sum, c) => sum + c.tokenCount, 0);
 
-    const issues = await processChunks(chunks);
+      logger.info(
+        {
+          deliveryId,
+          chunkCount: chunks.length,
+          chunkEstimateTokens
+        },
+        `Chunks created: ${chunks.length}, estimated chunk tokens: ${chunkEstimateTokens}`
+      );
 
-    logger.info(
-      { deliveryId, issueCount: issues.length },
-      `Issues found: ${issues.length}`
-    );
+      const { issues, llmTokensUsed } = await processChunks(chunks);
 
-    if (issues.length > 0) {
-      const prDetails = await getPRDetails(repoFullName, prNumber);
-      const commitId = prDetails.head.sha;
-      const reviewComments = buildReviewComments(issues);
+      logger.info(
+        { deliveryId, issueCount: issues.length, llmTokensUsed },
+        `Issues found: ${issues.length}`
+      );
 
-      await postReview(repoFullName, prNumber, reviewComments, commitId);
+      if (issues.length > 0) {
+        const existingBodies = await listIssueComments(repoFullName, prNumber);
+        const toPost = filterIssuesNotYetPosted(issues, existingBodies);
 
-      logger.info({ deliveryId, prNumber, repoFullName }, "Review posted");
+        if (toPost.length > 0) {
+          const prDetails = await getPRDetails(repoFullName, prNumber);
+          const commitId = prDetails.head.sha;
+          const reviewComments = buildReviewComments(toPost);
+
+          await postReview(repoFullName, prNumber, reviewComments, commitId);
+
+          logger.info(
+            { deliveryId, prNumber, repoFullName, postedCount: toPost.length },
+            "Review posted"
+          );
+        } else {
+          logger.info(
+            { deliveryId, prNumber },
+            "All issues already present on PR; skipping comment post"
+          );
+        }
+      }
+
+      await prisma.reviewJob.update({
+        where: { id: reviewJob.id },
+        data: {
+          status: "completed",
+          issueCount: issues.length,
+          tokenUsed: llmTokensUsed
+        }
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      await prisma.reviewJob.update({
+        where: { id: reviewJob.id },
+        data: {
+          status: "failed",
+          error: message
+        }
+      });
+      throw err;
     }
   },
   {
@@ -66,11 +125,9 @@ worker.on("completed", (job) => {
 });
 
 worker.on("failed", (job, err) => {
-  logger.error({ jobId: job?.id, err }, "Review job failed");
+  logger.error({ jobId: job?.id, err }, "Job failed");
 });
 
-// Without this listener, ioredis connection errors are silently swallowed
-// and the worker stops dequeuing new jobs with no visible output.
 worker.on("error", (err) => {
   logger.error({ err }, "Worker connection error");
 });

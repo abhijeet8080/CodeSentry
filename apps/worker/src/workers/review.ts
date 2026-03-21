@@ -11,22 +11,31 @@ export type ReviewIssueResult = {
   description: string;
   suggestion: string | null;
   filename: string;
-  addedLines: number[];  // valid diff lines for this chunk — used to snap AI line numbers
+  addedLines: number[];
 };
 
-export async function processChunks(
-  chunks: ReviewChunk[]
-): Promise<ReviewIssueResult[]> {
+export async function processChunks(chunks: ReviewChunk[]): Promise<{
+  issues: ReviewIssueResult[];
+  llmTokensUsed: number;
+}> {
   const results: ReviewIssueResult[] = [];
+  let llmTokensUsed = 0;
 
   for (const chunk of chunks) {
     try {
-      const summary = await summarizeChunk(chunk);
+      const { summary, tokens: summarizeTokens } = await summarizeChunk(chunk);
+      llmTokensUsed += summarizeTokens;
 
-      const issuesData = await identifyIssues(chunk, summary);
+      const { data: issuesPayload, tokens: identifyTokens } =
+        await identifyIssues(chunk, summary);
+      llmTokensUsed += identifyTokens;
 
-      for (const issue of issuesData.issues) {
-        const suggestion = await generateSuggestion(issue, chunk);
+      for (const issue of issuesPayload.issues) {
+        const { suggestion, tokens: suggestTokens } = await generateSuggestion(
+          issue,
+          chunk
+        );
+        llmTokensUsed += suggestTokens;
 
         results.push({
           ...issue,
@@ -40,5 +49,5 @@ export async function processChunks(
     }
   }
 
-  return results;
+  return { issues: results, llmTokensUsed };
 }

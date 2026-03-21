@@ -4,9 +4,11 @@ import { serve } from "@hono/node-server";
 import { env } from "@config/env";
 import { logger } from "@config/logger";
 import webhook from "./routes/webhook";
+import stats from "./routes/stats";
 
 const app = new Hono();
 app.route("/webhook", webhook);
+app.route("/stats", stats);
 
 app.get("/health", (c) => c.json({ ok: true }));
 

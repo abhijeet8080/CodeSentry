@@ -1,6 +1,19 @@
 import type { ReviewIssueResult } from "../workers/review";
 import { logger } from "@config/logger";
 
+/** Skip issues whose description already appears in an existing PR comment (dedupe). */
+export function filterIssuesNotYetPosted(
+  issues: ReviewIssueResult[],
+  existingCommentBodies: string[]
+): ReviewIssueResult[] {
+  return issues.filter((issue) => {
+    const alreadyCommented = existingCommentBodies.some((body) =>
+      body.includes(issue.description)
+    );
+    return !alreadyCommented;
+  });
+}
+
 /**
  * Snaps an AI-returned line number to the nearest valid line in the diff.
  *

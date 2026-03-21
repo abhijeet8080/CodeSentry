@@ -16,5 +16,8 @@ export async function summarizeChunk(chunk: ReviewChunk) {
     ]
   });
 
-  return response.output_text;
+  return {
+    summary: response.output_text ?? "",
+    tokens: response.usage?.total_tokens ?? 0
+  };
 }

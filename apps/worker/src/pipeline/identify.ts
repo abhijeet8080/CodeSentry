@@ -38,7 +38,7 @@ export type IssuesPayload = {
 export async function identifyIssues(
   chunk: ReviewChunk,
   summary: string
-): Promise<IssuesPayload> {
+): Promise<{ data: IssuesPayload; tokens: number }> {
   const systemPrompt = `You are a senior ${chunk.language} engineer. Identify real issues only.`;
   const userContent = `\nSummary:\n${summary}\n\nDiff:\n${chunk.patch}\n        `;
 
@@ -81,5 +81,8 @@ export async function identifyIssues(
     "OpenAI response: identifyIssues"
   );
 
-  return parsed;
+  return {
+    data: parsed,
+    tokens: response.usage?.total_tokens ?? 0
+  };
 }

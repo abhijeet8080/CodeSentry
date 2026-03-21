@@ -164,11 +164,21 @@ webhook.post("/github", async (c) => {
         return c.text("Accepted", 202);
       }
 
-      await reviewQueue.add("review-pr", {
-        prNumber,
-        repoFullName,
-        deliveryId
-      });
+      await reviewQueue.add(
+        "review-pr",
+        {
+          prNumber,
+          repoFullName,
+          deliveryId
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: "exponential",
+            delay: 1000
+          }
+        }
+      );
 
       logger.info(
         { deliveryId, prNumber, repoFullName },

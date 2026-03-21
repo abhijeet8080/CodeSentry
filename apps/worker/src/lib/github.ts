@@ -44,6 +44,22 @@ export type PullReviewComment =
     RestEndpointMethodTypes["pulls"]["createReview"]["parameters"]["comments"]
   >[number];
 
+export async function listIssueComments(
+  repoFullName: string,
+  prNumber: number
+): Promise<string[]> {
+  const { owner, repo } = parseRepo(repoFullName);
+
+  const { data } = await octokit.rest.issues.listComments({
+    owner,
+    repo,
+    issue_number: prNumber,
+    per_page: 100
+  });
+
+  return data.map((c) => c.body ?? "");
+}
+
 export async function postReview(
   repoFullName: string,
   prNumber: number,

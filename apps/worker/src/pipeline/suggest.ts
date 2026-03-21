@@ -7,8 +7,10 @@ type IssueRow = IssuesPayload["issues"][number];
 export async function generateSuggestion(
   issue: IssueRow,
   chunk: ReviewChunk
-): Promise<string | null> {
-  if (!["bug", "security"].includes(issue.type)) return null;
+): Promise<{ suggestion: string | null; tokens: number }> {
+  if (!["bug", "security"].includes(issue.type)) {
+    return { suggestion: null, tokens: 0 };
+  }
 
   const response = await openai.responses.create({
     model: "gpt-4.1-mini",
@@ -30,5 +32,8 @@ ${chunk.patch}
     ]
   });
 
-  return `\`\`\`suggestion\n${response.output_text}\n\`\`\``;
+  return {
+    suggestion: `\`\`\`suggestion\n${response.output_text}\n\`\`\``,
+    tokens: response.usage?.total_tokens ?? 0
+  };
 }
