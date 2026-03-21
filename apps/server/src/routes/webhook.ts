@@ -124,23 +124,37 @@ webhook.post("/github", async (c) => {
     );
 
     // Idempotency: create is atomic; if we race, unique constraint will throw.
-    try {
-      const record = await prisma.webhookEvent.create({
-        data: {
-          deliveryId,
-          payload,
-        },
-      });
-      logger.info(
-        {
-          deliveryId,
-          webhookEventId: record.id,
-          action,
-          repoFullName: repoFullName ?? null,
-          prNumber: prNumber ?? null
-        },
-        "GitHub webhook: stored, accepted"
-      );
+    // TODO: re-enable once queue processing is verified end-to-end
+    // try {
+    //   const record = await prisma.webhookEvent.create({
+    //     data: {
+    //       deliveryId,
+    //       payload,
+    //     },
+    //   });
+    //   logger.info(
+    //     {
+    //       deliveryId,
+    //       webhookEventId: record.id,
+    //       action,
+    //       repoFullName: repoFullName ?? null,
+    //       prNumber: prNumber ?? null
+    //     },
+    //     "GitHub webhook: stored, accepted"
+    //   );
+    // } catch (err) {
+    //   if (
+    //     err instanceof Prisma.PrismaClientKnownRequestError &&
+    //     err.code === "P2002"
+    //   ) {
+    //     logger.info(
+    //       { deliveryId, action, repoFullName: repoFullName ?? null },
+    //       "GitHub webhook: duplicate delivery id, idempotent ok"
+    //     );
+    //     return c.text("Duplicate", 200);
+    //   }
+    //   throw err;
+    // }
 
       if (typeof repoFullName !== "string" || typeof prNumber !== "number") {
         logger.warn(
@@ -160,19 +174,6 @@ webhook.post("/github", async (c) => {
         { deliveryId, prNumber, repoFullName },
         "Job added to queue"
       );
-    } catch (err) {
-      if (
-        err instanceof Prisma.PrismaClientKnownRequestError &&
-        err.code === "P2002"
-      ) {
-        logger.info(
-          { deliveryId, action, repoFullName: repoFullName ?? null },
-          "GitHub webhook: duplicate delivery id, idempotent ok"
-        );
-        return c.text("Duplicate", 200);
-      }
-      throw err;
-    }
 
     return c.text("Accepted", 202);
   } catch (err) {
