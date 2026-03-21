@@ -10,6 +10,7 @@
   "dependencies": {
     "@octokit/rest": "^22.0.0",
     "bullmq": "^5.71.0",
-    "ioredis": "^5.10.1"
+    "ioredis": "^5.10.1",
+    "openai": "^6.32.0"
   }
 }

@@ -4,6 +4,7 @@ import { redisConnectionOptions } from "@config/redis";
 import { logger } from "@config/logger";
 import { getPRFiles } from "./lib/github";
 import { buildChunks } from "./lib/chunker";
+import { processChunks } from "./workers/review";
 
 const worker = new Worker<ReviewJob>(
   "review-queue",
@@ -31,6 +32,13 @@ const worker = new Worker<ReviewJob>(
     logger.info(
       { deliveryId, chunkCount: chunks.length, totalTokens },
       `Chunks created: ${chunks.length}, total tokens: ${totalTokens}`
+    );
+
+    const issues = await processChunks(chunks);
+
+    logger.info(
+      { deliveryId, issueCount: issues.length },
+      `Issues found: ${issues.length}`
     );
   },
   {

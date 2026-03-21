@@ -9,6 +9,14 @@ import {
 type PullListFile =
   RestEndpointMethodTypes["pulls"]["listFiles"]["response"]["data"][number];
 
+export type ReviewChunk = {
+  filename: string;
+  patch: string;
+  addedLines: number[];
+  language: string;
+  tokenCount: number;
+};
+
 function getLanguage(filename: string) {
   if (filename.endsWith(".ts") || filename.endsWith(".tsx")) return "typescript";
   if (filename.endsWith(".js") || filename.endsWith(".jsx")) return "javascript";
@@ -61,13 +69,7 @@ function splitPatch(patch: string, maxTokens: number) {
 }
 
 export function buildChunks(files: PullListFile[]) {
-  const chunks: Array<{
-    filename: string;
-    patch: string;
-    addedLines: number[];
-    language: string;
-    tokenCount: number;
-  }> = [];
+  const chunks: ReviewChunk[] = [];
 
   let totalTokens = 0;
 
