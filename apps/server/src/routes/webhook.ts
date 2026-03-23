@@ -95,6 +95,9 @@ webhook.post("/github", async (c) => {
     const pr = p.pull_request as { number?: unknown } | undefined;
     const prNumber =
       typeof pr?.number === "number" ? pr.number : undefined;
+    const installation = p.installation as { id?: unknown } | undefined;
+    const installationId =
+      typeof installation?.id === "number" ? installation.id : undefined;
 
     if (!["opened", "synchronize"].includes(action ?? "")) {
       logger.info(
@@ -164,12 +167,21 @@ webhook.post("/github", async (c) => {
         return c.text("Accepted", 202);
       }
 
+      if (typeof installationId !== "number") {
+        logger.warn(
+          { deliveryId, installationId: installationId ?? null },
+          "GitHub webhook: missing installation id (use a GitHub App webhook), skip queue"
+        );
+        return c.text("Accepted", 202);
+      }
+
       await reviewQueue.add(
         "review-pr",
         {
           prNumber,
           repoFullName,
-          deliveryId
+          deliveryId,
+          installationId
         },
         {
           attempts: 3,

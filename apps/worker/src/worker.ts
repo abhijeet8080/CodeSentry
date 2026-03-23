@@ -3,7 +3,9 @@ import type { ReviewJob } from "@config/types";
 import { redisConnectionOptions } from "@config/redis";
 import { logger } from "@config/logger";
 import { prisma } from "./lib/db";
+import { getInstallationClient } from "./lib/github-app";
 import {
+  type InstallationOctokit,
   getPRDetails,
   getPRFiles,
   listIssueComments,
@@ -19,10 +21,23 @@ import { processChunks } from "./workers/review";
 const worker = new Worker<ReviewJob>(
   "review-queue",
   async (job) => {
-    const { prNumber, repoFullName, deliveryId } = job.data;
+    const { prNumber, repoFullName, deliveryId, installationId } = job.data;
+
+    if (typeof installationId !== "number") {
+      throw new Error("Missing installationId on review job");
+    }
+
+    const octokit = (await getInstallationClient(installationId)) as unknown as InstallationOctokit;
 
     logger.info(
-      { jobId: job.id, name: job.name, deliveryId, prNumber, repoFullName },
+      {
+        jobId: job.id,
+        name: job.name,
+        deliveryId,
+        prNumber,
+        repoFullName,
+        installationId
+      },
       "Processing PR"
     );
 
@@ -45,7 +60,7 @@ const worker = new Worker<ReviewJob>(
     try {
       logger.info({ deliveryId, prNumber, repoFullName }, "Fetching PR files");
 
-      const files = await getPRFiles(repoFullName, prNumber);
+      const files = await getPRFiles(octokit, repoFullName, prNumber);
 
       logger.info(
         { deliveryId, fileCount: files.length },
@@ -73,15 +88,25 @@ const worker = new Worker<ReviewJob>(
       );
 
       if (issues.length > 0) {
-        const existingBodies = await listIssueComments(repoFullName, prNumber);
+        const existingBodies = await listIssueComments(
+          octokit,
+          repoFullName,
+          prNumber
+        );
         const toPost = filterIssuesNotYetPosted(issues, existingBodies);
 
         if (toPost.length > 0) {
-          const prDetails = await getPRDetails(repoFullName, prNumber);
+          const prDetails = await getPRDetails(octokit, repoFullName, prNumber);
           const commitId = prDetails.head.sha;
           const reviewComments = buildReviewComments(toPost);
 
-          await postReview(repoFullName, prNumber, reviewComments, commitId);
+          await postReview(
+            octokit,
+            repoFullName,
+            prNumber,
+            reviewComments,
+            commitId
+          );
 
           logger.info(
             { deliveryId, prNumber, repoFullName, postedCount: toPost.length },

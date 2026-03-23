@@ -11,6 +11,8 @@ export const env = {
   REDIS_URL: process.env.REDIS_URL!,
   OPENAI_API_KEY: process.env.OPENAI_API_KEY!,
   GITHUB_WEBHOOK_SECRET: process.env.GITHUB_WEBHOOK_SECRET!,
-  /** GitHub PAT (repo read) — used by worker for PR file fetches */
-  GITHUB_TOKEN: process.env.GITHUB_TOKEN!
+  /** GitHub App — worker uses installation token via @octokit/app */
+  GITHUB_APP_ID: process.env.GITHUB_APP_ID!,
+  /** PEM private key (use \\n in .env for newlines, or real newlines) */
+  GITHUB_PRIVATE_KEY: process.env.GITHUB_PRIVATE_KEY!
 };
