@@ -1,6 +1,9 @@
 import { env } from "@config/env";
 
-function normalizePrivateKey(key: string): string {
+function normalizePrivateKey(key: string | undefined): string {
+  if (!key) {
+    throw new Error("GITHUB_PRIVATE_KEY environment variable is missing or empty. Please set it in your Render environment variables.");
+  }
   return key.replace(/\\n/g, "\n");
 }
 
