@@ -10,13 +10,14 @@ let _app: OctokitApp | null = null;
 
 async function getApp(): Promise<OctokitApp> {
   if (!_app) {
-    const { App } = await import("@octokit/app");
+    const dynImport = new Function('return import("@octokit/app")') as () => Promise<typeof import("@octokit/app")>;
+    const { App } = await dynImport();
     _app = new App({
       appId: env.GITHUB_APP_ID,
       privateKey: normalizePrivateKey(env.GITHUB_PRIVATE_KEY)
     });
   }
-  return _app;
+  return _app!;
 }
 
 export async function getInstallationClient(installationId: number) {
